@@ -1,0 +1,1337 @@
+<!DOCTYPE html>
+<html class="dark" lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>IMDb Title Analytics Explorer</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<script src="https://cdn.jsdelivr.net/npm/papaparse@5"></script>
+<style>
+/* ═══════════════════════════════════════════════════
+   DESIGN TOKENS  (from DESIGN.md)
+   ═══════════════════════════════════════════════════ */
+:root {
+  --bg:             #0f131b;
+  --surf-low:       #181c24;
+  --surf:           #1c2028;
+  --surf-high:      #262a32;
+  --surf-highest:   #31353e;
+  --surf-bright:    #353942;
+  --on-surf:        #dfe2ee;
+  --on-surf-var:    #d1c5ac;
+  --primary:        #ffe5a0;
+  --primary-ctr:    #f5c518;
+  --on-primary-ctr: #695200;
+  --secondary:      #adc6ff;
+  --sec-ctr:        #0566d9;
+  --tertiary:       #7dffc4;
+  --tert-ctr:       #54e3a7;
+  --outline:        #9a9078;
+  --outline-var:    #4e4633;
+  --error:          #ffb4ab;
+  --deep:           #0a0e16;
+  --border:         rgba(255,255,255,0.08);
+  --border-hover:   rgba(255,255,255,0.15);
+  --font-sans:      'Inter', system-ui, sans-serif;
+  --font-mono:      'JetBrains Mono', monospace;
+  --rad-sm:   2px;
+  --rad:      4px;
+  --rad-md:   6px;
+  --rad-lg:   8px;
+  --rad-xl:   12px;
+  --sp-xs:    4px;
+  --sp-sm:    8px;
+  --sp-md:    16px;
+  --sp-lg:    24px;
+  --sp-xl:    32px;
+}
+
+/* ═══ RESET ═══════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--font-sans);
+  background: var(--bg);
+  color: var(--on-surf);
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ═══ SCROLLBAR ═══════════════════════════════════ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--surf-low); }
+::-webkit-scrollbar-thumb { background: var(--surf-highest); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--outline-var); }
+
+/* ═══ SIDEBAR ═════════════════════════════════════ */
+.sidebar {
+  width: 240px;
+  min-width: 240px;
+  background: var(--surf-low);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  padding: var(--sp-lg) var(--sp-md);
+  z-index: 50;
+  height: 100vh;
+}
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-sm);
+  margin-bottom: var(--sp-xl);
+}
+.sidebar-brand .icon {
+  width: 32px; height: 32px;
+  border-radius: 50%;
+  background: var(--primary-ctr);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--on-primary-ctr);
+  font-weight: 700;
+}
+.sidebar-brand .icon .material-symbols-outlined { font-size: 18px; font-variation-settings: 'FILL' 1; }
+.sidebar-brand h1 {
+  font-size: 17px; font-weight: 700;
+  color: var(--primary); line-height: 1.2;
+}
+.sidebar-brand p {
+  font-size: 10px; color: var(--on-surf-var);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  font-weight: 600;
+}
+.sidebar-nav { list-style: none; flex: 1; }
+.sidebar-nav li { margin-bottom: 2px; }
+.sidebar-nav a {
+  display: flex; align-items: center; gap: var(--sp-md);
+  padding: var(--sp-sm) var(--sp-md);
+  border-radius: var(--rad-lg);
+  font-size: 12px; font-weight: 600;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+  color: var(--on-surf-var);
+  transition: background 0.15s, color 0.15s;
+  border-right: 3px solid transparent;
+}
+.sidebar-nav a:hover { background: var(--surf-high); color: var(--on-surf); }
+.sidebar-nav a.active {
+  color: var(--primary);
+  background: rgba(255,229,160,0.05);
+  border-right-color: var(--primary);
+}
+.sidebar-nav a .material-symbols-outlined { font-size: 20px; }
+.sidebar-footer { margin-top: auto; }
+.sidebar-export {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  width: 100%; padding: var(--sp-sm) 0;
+  background: var(--surf-highest);
+  border: 1px solid var(--border);
+  border-radius: var(--rad-lg);
+  color: var(--on-surf);
+  font-size: 12px; font-weight: 600;
+  letter-spacing: 0.04em;
+  cursor: pointer; text-decoration: none;
+  transition: background 0.2s;
+  margin-bottom: var(--sp-md);
+}
+.sidebar-export:hover { background: var(--surf-bright); }
+.sidebar-export .material-symbols-outlined { font-size: 16px; }
+.sidebar-help {
+  display: flex; align-items: center; gap: var(--sp-md);
+  padding: var(--sp-sm) var(--sp-md);
+  border-radius: var(--rad-lg);
+  border-top: 1px solid var(--border);
+  padding-top: var(--sp-md);
+  font-size: 12px; font-weight: 500;
+  color: var(--on-surf-var);
+  text-decoration: none;
+  transition: background 0.2s;
+}
+.sidebar-help:hover { background: var(--surf-high); color: var(--on-surf); }
+.sidebar-help .material-symbols-outlined { font-size: 20px; }
+
+/* ═══ MAIN AREA ═══════════════════════════════════ */
+.main-area {
+  flex: 1; display: flex; flex-direction: column;
+  min-width: 0; background: var(--bg);
+}
+
+/* ═══ TOP BAR ═════════════════════════════════════ */
+.top-bar {
+  background: var(--surf);
+  border-bottom: 1px solid var(--border);
+  padding: 12px var(--sp-lg);
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.top-bar .title {
+  font-size: 20px; font-weight: 800;
+  color: var(--primary-ctr);
+}
+.top-bar .nav-tabs { display: flex; gap: var(--sp-lg); align-items: center; }
+.top-bar .nav-tab {
+  font-size: 12px; font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--on-surf-var);
+  text-decoration: none;
+  padding-bottom: 8px;
+  border-bottom: 2px solid transparent;
+  transition: color 0.2s;
+}
+.top-bar .nav-tab.active { color: var(--on-surf); border-bottom-color: var(--primary); }
+.top-bar .nav-tab:hover { color: var(--primary); }
+.top-bar-right { display: flex; align-items: center; gap: var(--sp-md); }
+.search-wrap { position: relative; }
+.search-wrap .material-symbols-outlined {
+  position: absolute; left: 12px; top: 50%;
+  transform: translateY(-50%);
+  font-size: 18px; color: var(--on-surf-var);
+  pointer-events: none;
+}
+.search-box {
+  background: var(--surf-highest);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 16px 7px 38px;
+  color: var(--on-surf);
+  font-size: 13px; font-family: var(--font-sans);
+  width: 240px; outline: none;
+  transition: border-color 0.2s;
+}
+.search-box::placeholder { color: var(--on-surf-var); }
+.search-box:focus { border-color: rgba(245,197,24,0.4); }
+.icon-btn {
+  color: var(--on-surf-var); font-size: 22px;
+  background: none; border: none; cursor: pointer;
+  padding: 4px; transition: color 0.2s;
+}
+.icon-btn:hover { color: var(--primary); }
+
+/* ═══ DASHBOARD CANVAS ════════════════════════════ */
+.canvas {
+  flex: 1; overflow-y: auto;
+  padding: var(--sp-lg);
+}
+.canvas-inner {
+  max-width: 1600px; margin: 0 auto;
+  display: flex; flex-direction: column;
+  gap: var(--sp-lg);
+}
+
+/* ═══ FILTER BAR ══════════════════════════════════ */
+.filter-bar {
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: var(--rad-xl);
+  padding: var(--sp-md) 20px;
+  display: flex; flex-wrap: wrap;
+  gap: var(--sp-lg);
+  align-items: flex-end;
+}
+.filter-group { min-width: 140px; }
+.filter-group.grow { flex: 1; min-width: 220px; }
+.filter-label {
+  display: block;
+  font-size: 11px; font-weight: 600;
+  color: var(--on-surf-var);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 6px;
+}
+.filter-label-row {
+  display: flex; justify-content: space-between; align-items: center;
+}
+.filter-label-row .val {
+  font-family: var(--font-mono); font-size: 14px;
+  color: var(--primary); font-weight: 500;
+}
+/* Dark select */
+.dark-select {
+  width: 100%;
+  background: var(--deep);
+  border: 1px solid var(--border);
+  border-radius: var(--rad-lg);
+  padding: 8px 32px 8px 12px;
+  color: var(--on-surf);
+  font-size: 13px; font-family: var(--font-sans);
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23d1c5ac' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  transition: border-color 0.2s;
+}
+.dark-select:focus { border-color: rgba(59,130,246,0.6); }
+.dark-select option { background: var(--deep); color: var(--on-surf); }
+/* Dark number input */
+.dark-number {
+  width: 100%;
+  background: var(--deep);
+  border: 1px solid var(--border);
+  border-radius: var(--rad-lg);
+  padding: 8px 12px;
+  color: var(--on-surf);
+  font-size: 14px; font-family: var(--font-mono);
+  font-weight: 500;
+  outline: none;
+  transition: border-color 0.2s;
+  -moz-appearance: textfield;
+}
+.dark-number::-webkit-inner-spin-button,
+.dark-number::-webkit-outer-spin-button { opacity: 1; }
+.dark-number:focus { border-color: rgba(59,130,246,0.6); }
+/* Dual range slider */
+.range-track {
+  position: relative; height: 6px;
+  background: var(--surf-highest);
+  border-radius: 999px; margin-top: 10px;
+  cursor: pointer;
+}
+.range-fill {
+  position: absolute; height: 100%;
+  background: var(--primary);
+  border-radius: 999px;
+  pointer-events: none;
+}
+.range-thumb {
+  position: absolute; top: 50%; transform: translate(-50%, -50%);
+  width: 16px; height: 16px;
+  background: var(--primary-ctr);
+  border: 2px solid var(--bg);
+  border-radius: 50%;
+  cursor: grab; z-index: 2;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+  transition: box-shadow 0.15s;
+}
+.range-thumb:hover { box-shadow: 0 0 0 4px rgba(245,197,24,0.2); }
+.range-thumb:active { cursor: grabbing; }
+/* Genre chips */
+.genre-chips {
+  display: flex; flex-wrap: wrap; gap: var(--sp-xs);
+  max-height: 64px; overflow-y: auto;
+}
+.genre-chip {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: var(--rad-md);
+  font-size: 12px; font-weight: 600;
+  letter-spacing: 0.03em;
+  cursor: pointer;
+  transition: all 0.15s;
+  border: 1px solid var(--border);
+  background: var(--surf-highest);
+  color: var(--on-surf-var);
+  user-select: none;
+}
+.genre-chip:hover { background: var(--surf-bright); color: var(--on-surf); }
+.genre-chip.active {
+  background: rgba(255,229,160,0.15);
+  color: var(--primary);
+  border-color: rgba(245,197,24,0.3);
+}
+.genre-chip.more {
+  background: var(--surf-highest);
+  color: var(--on-surf-var);
+  border-color: var(--border);
+}
+
+/* ═══ METRICS ROW ═════════════════════════════════ */
+.metrics-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--sp-md);
+}
+.metric-card {
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: var(--rad-xl);
+  padding: 20px var(--sp-lg);
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5);
+  transition: border-color 0.25s, background 0.25s;
+}
+.metric-card:hover { border-color: var(--border-hover); background: var(--surf-high); }
+.metric-top {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: var(--sp-md);
+}
+.metric-label {
+  font-size: 11px; font-weight: 600;
+  color: var(--on-surf-var);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.metric-icon { color: rgba(255,255,255,0.3); font-size: 22px; }
+.metric-icon.primary { color: rgba(245,197,24,0.5); }
+.metric-icon.secondary { color: rgba(173,198,255,0.5); }
+.metric-icon.tertiary { color: rgba(125,255,196,0.5); }
+.metric-value {
+  font-family: var(--font-mono);
+  font-size: 32px; font-weight: 700;
+  color: var(--on-surf);
+  line-height: 1.1;
+}
+.metric-value.gold { color: var(--primary-ctr); }
+.metric-sub {
+  margin-top: var(--sp-sm);
+  font-size: 11px; font-weight: 600;
+  display: flex; align-items: center; gap: 4px;
+}
+.metric-sub.up { color: var(--tert-ctr); }
+.metric-sub.down { color: var(--error); }
+.metric-sub.neutral { color: var(--on-surf-var); }
+.metric-sub .material-symbols-outlined { font-size: 14px; }
+
+/* ═══ CHARTS ROW ══════════════════════════════════ */
+.charts-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--sp-md);
+}
+.chart-card {
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: var(--rad-xl);
+  padding: var(--sp-lg);
+  display: flex; flex-direction: column;
+  min-height: 420px;
+  box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5);
+  transition: border-color 0.25s;
+}
+.chart-card:hover { border-color: var(--border-hover); }
+.chart-header {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  margin-bottom: var(--sp-md);
+}
+.chart-title {
+  font-size: 20px; font-weight: 600;
+  color: var(--on-surf);
+}
+.chart-subtitle {
+  font-size: 12px; color: var(--on-surf-var);
+  margin-top: 2px;
+}
+.chart-action {
+  display: flex; align-items: center; gap: 4px;
+  font-size: 12px; font-weight: 600;
+  color: var(--primary); cursor: pointer;
+  background: none; border: none;
+  transition: color 0.2s;
+}
+.chart-action:hover { color: var(--primary-ctr); }
+.chart-action .material-symbols-outlined { font-size: 16px; }
+.chart-body { flex: 1; position: relative; }
+
+/* ═══ BAR CHART (CSS) ═════════════════════════════ */
+.bar-rows { display: flex; flex-direction: column; justify-content: space-around; height: 100%; }
+.bar-row {
+  display: flex; align-items: center; gap: var(--sp-md);
+  padding: 3px 0;
+}
+.bar-row:hover .bar-fill { filter: brightness(1.15); }
+.bar-label {
+  width: 80px; text-align: right;
+  font-size: 12px; font-weight: 600;
+  color: var(--on-surf-var);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.bar-track {
+  flex: 1; height: 22px;
+  background: var(--surf-highest);
+  border-radius: var(--rad-sm);
+  overflow: hidden; position: relative;
+}
+.bar-fill {
+  height: 100%;
+  border-radius: var(--rad-sm);
+  transition: width 0.6s ease-out, filter 0.2s;
+}
+.bar-count {
+  width: 40px; text-align: right;
+  font-family: var(--font-mono);
+  font-size: 12px; font-weight: 600;
+  color: var(--on-surf);
+}
+
+/* Viridis colors */
+.v1 { background: #440154; } .v2 { background: #3b528b; }
+.v3 { background: #21918c; } .v4 { background: #5ec962; }
+.v5 { background: #fde725; }
+
+/* ═══ DATA TABLE ══════════════════════════════════ */
+.table-section {
+  background: var(--surf);
+  border: 1px solid var(--border);
+  border-radius: var(--rad-xl);
+  overflow: hidden;
+}
+.table-header {
+  padding: var(--sp-md) var(--sp-lg);
+  border-bottom: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  background: rgba(38,42,50,0.5);
+}
+.table-header h2 {
+  font-size: 20px; font-weight: 600; color: var(--on-surf);
+}
+.table-actions { display: flex; gap: var(--sp-sm); }
+.table-btn {
+  padding: 5px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--rad-md);
+  font-size: 12px; font-weight: 600;
+  color: var(--on-surf);
+  background: none; cursor: pointer;
+  transition: background 0.2s;
+}
+.table-btn:hover { background: var(--surf-bright); }
+.data-table {
+  width: 100%; border-collapse: collapse;
+  text-align: left; white-space: nowrap;
+}
+.data-table thead {
+  background: var(--surf-high);
+  border-bottom: 1px solid var(--border);
+}
+.data-table th {
+  padding: var(--sp-sm) var(--sp-md);
+  font-size: 11px; font-weight: 600;
+  color: var(--on-surf-var);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  user-select: none;
+  transition: color 0.2s;
+}
+.data-table th:hover { color: var(--on-surf); }
+.data-table th .sort-icon { font-size: 14px; vertical-align: middle; margin-left: 2px; }
+.data-table th .sort-icon.hidden { opacity: 0; }
+.data-table th:hover .sort-icon.hidden { opacity: 0.4; }
+.data-table td {
+  padding: 10px var(--sp-md);
+  font-size: 13px;
+  border-bottom: 1px solid rgba(255,255,255,0.03);
+}
+.data-table tbody tr { transition: background 0.15s; }
+.data-table tbody tr:hover { background: rgba(255,255,255,0.02); }
+.data-table tbody tr:nth-child(even) { background: rgba(255,255,255,0.01); }
+.data-table tbody tr:nth-child(even):hover { background: rgba(255,255,255,0.03); }
+.td-title { font-weight: 500; color: var(--primary-ctr); }
+.td-type { color: var(--on-surf-var); }
+.td-year { font-family: var(--font-mono); }
+.td-rating {
+  font-family: var(--font-mono);
+  display: flex; align-items: center; gap: 3px;
+}
+.td-rating .material-symbols-outlined {
+  font-size: 14px; color: var(--primary);
+  font-variation-settings: 'FILL' 1;
+}
+.td-votes { font-family: var(--font-mono); text-align: right; }
+.td-genres { display: flex; gap: 6px; flex-wrap: wrap; }
+.genre-badge {
+  padding: 2px 8px;
+  border-radius: var(--rad);
+  background: var(--surf-bright);
+  font-size: 11px;
+  color: var(--on-surf-var);
+  border: 1px solid var(--border);
+}
+.table-footer {
+  padding: var(--sp-md) var(--sp-lg);
+  border-top: 1px solid var(--border);
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 12px; color: var(--on-surf-var);
+}
+.pagination { display: flex; gap: var(--sp-xs); }
+.page-btn {
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--rad);
+  background: none; color: var(--on-surf);
+  font-size: 12px; cursor: pointer;
+  transition: background 0.2s;
+}
+.page-btn:hover { background: var(--surf-bright); }
+.page-btn.active {
+  background: rgba(255,229,160,0.15);
+  color: var(--primary);
+  border-color: rgba(245,197,24,0.3);
+}
+.page-btn:disabled { opacity: 0.4; cursor: default; }
+
+/* ═══ LOADING ═════════════════════════════════════ */
+.loading-overlay {
+  position: fixed; inset: 0;
+  background: var(--bg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 999; flex-direction: column; gap: 16px;
+}
+.loading-spinner {
+  width: 40px; height: 40px;
+  border: 3px solid var(--surf-highest);
+  border-top-color: var(--primary-ctr);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.loading-text {
+  font-size: 14px; color: var(--on-surf-var);
+  font-weight: 500;
+}
+
+/* ═══ RESPONSIVE ══════════════════════════════════ */
+@media (max-width: 1200px) {
+  .charts-row { grid-template-columns: 1fr; }
+  .metrics-row { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 900px) {
+  .sidebar { display: none; }
+  .metrics-row { grid-template-columns: 1fr 1fr; }
+  .filter-bar { flex-direction: column; }
+}
+</style>
+</head>
+
+<body>
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="loading-spinner"></div>
+  <div class="loading-text">Loading 9,999 titles…</div>
+</div>
+
+<!-- ═══ SIDEBAR ═══ -->
+<nav class="sidebar">
+  <div class="sidebar-brand">
+    <div class="icon"><span class="material-symbols-outlined">movie</span></div>
+    <div>
+      <h1>IMDb Explorer</h1>
+      <p>Title Analytics v1.0</p>
+    </div>
+  </div>
+
+  <ul class="sidebar-nav">
+    <li><a class="active" href="#"><span class="material-symbols-outlined" style="font-variation-settings:'FILL' 1">dashboard</span>Analytics Overview</a></li>
+    <li><a href="#"><span class="material-symbols-outlined">dataset</span>Title Explorer</a></li>
+    <li><a href="#"><span class="material-symbols-outlined">public</span>Global Trends</a></li>
+    <li><a href="#"><span class="material-symbols-outlined">factory</span>Production Insights</a></li>
+    <li><a href="#"><span class="material-symbols-outlined">settings</span>Settings</a></li>
+  </ul>
+
+  <div class="sidebar-footer">
+    <a class="sidebar-export" href="#" id="btnExport">
+      <span class="material-symbols-outlined">download</span>Export Global Data
+    </a>
+    <a class="sidebar-help" href="#">
+      <span class="material-symbols-outlined">help</span>Help Center
+    </a>
+  </div>
+</nav>
+
+<!-- ═══ MAIN ═══ -->
+<div class="main-area">
+  <!-- Top Bar -->
+  <header class="top-bar">
+    <span class="title">🎬 IMDb Title Analytics Explorer: Top 9,999 Ranked Titles</span>
+    <div class="nav-tabs">
+      <a class="nav-tab active" href="#">Dashboard</a>
+      <a class="nav-tab" href="#">Reports</a>
+      <a class="nav-tab" href="#">Global Trends</a>
+    </div>
+    <div class="top-bar-right">
+      <div class="search-wrap">
+        <span class="material-symbols-outlined">search</span>
+        <input class="search-box" id="searchInput" placeholder="Search titles..." type="text"/>
+      </div>
+      <button class="icon-btn"><span class="material-symbols-outlined">notifications</span></button>
+      <button class="icon-btn"><span class="material-symbols-outlined">account_circle</span></button>
+    </div>
+  </header>
+
+  <!-- Scrollable Canvas -->
+  <main class="canvas">
+    <div class="canvas-inner">
+
+      <!-- ═══ FILTER BAR ═══ -->
+      <section class="filter-bar">
+        <div class="filter-group">
+          <label class="filter-label">Title Type</label>
+          <select class="dark-select" id="filterType">
+            <option value="all">All Types</option>
+          </select>
+        </div>
+
+        <div class="filter-group grow">
+          <div class="filter-label filter-label-row">
+            <span>Year Range</span>
+            <span class="val" id="yearDisplay">1980 – 2023</span>
+          </div>
+          <div class="range-track" id="yearTrack">
+            <div class="range-fill" id="yearFill"></div>
+            <div class="range-thumb" id="yearThumbLo" data-which="lo"></div>
+            <div class="range-thumb" id="yearThumbHi" data-which="hi"></div>
+          </div>
+        </div>
+
+        <div class="filter-group" style="min-width:260px">
+          <label class="filter-label" style="text-align:center">Genres</label>
+          <div class="genre-chips" id="genreChips"></div>
+        </div>
+
+        <div class="filter-group">
+          <label class="filter-label">Min Votes</label>
+          <input class="dark-number" id="filterMinVotes" min="0" step="1000" type="number" value="50000"/>
+        </div>
+      </section>
+
+      <!-- ═══ METRICS ═══ -->
+      <section class="metrics-row">
+        <div class="metric-card">
+          <div class="metric-top">
+            <span class="metric-label">Total Titles</span>
+            <span class="material-symbols-outlined metric-icon primary">movie_filter</span>
+          </div>
+          <div class="metric-value" id="metricTotal">0</div>
+          <div class="metric-sub up" id="metricTotalSub">
+            <span class="material-symbols-outlined">trending_up</span>
+            <span>loading…</span>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-top">
+            <span class="metric-label">Avg Rating</span>
+            <span class="material-symbols-outlined metric-icon primary" style="font-variation-settings:'FILL' 1">star_rate</span>
+          </div>
+          <div class="metric-value gold" id="metricRating">0.0</div>
+          <div class="metric-sub neutral" id="metricRatingSub">Top 10% threshold: —</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-top">
+            <span class="metric-label">Median Votes</span>
+            <span class="material-symbols-outlined metric-icon secondary">how_to_vote</span>
+          </div>
+          <div class="metric-value" id="metricVotes">0</div>
+          <div class="metric-sub down" id="metricVotesSub">
+            <span class="material-symbols-outlined">trending_down</span>
+            <span>loading…</span>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-top">
+            <span class="metric-label">Earliest Year</span>
+            <span class="material-symbols-outlined metric-icon tertiary">calendar_month</span>
+          </div>
+          <div class="metric-value" id="metricYear">—</div>
+          <div class="metric-sub neutral" id="metricYearSub">Dataset bound: —</div>
+        </div>
+      </section>
+
+      <!-- ═══ CHARTS ═══ -->
+      <section class="charts-row">
+        <!-- Scatter -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Rating vs. Engagement Density</div>
+              <div class="chart-subtitle">Correlation between Average Rating and Number of Votes.</div>
+            </div>
+            <button class="icon-btn"><span class="material-symbols-outlined">more_vert</span></button>
+          </div>
+          <div class="chart-body">
+            <canvas id="scatterChart"></canvas>
+          </div>
+        </div>
+        <!-- Bar -->
+        <div class="chart-card">
+          <div class="chart-header">
+            <div>
+              <div class="chart-title">Top 10 Genres by Volume</div>
+              <div class="chart-subtitle">Color mapped to Average Rating (Viridis scale).</div>
+            </div>
+            <button class="chart-action" id="btnSortGenre">
+              <span class="material-symbols-outlined">filter_list</span>Sort
+            </button>
+          </div>
+          <div class="chart-body">
+            <div class="bar-rows" id="barChart"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ═══ DATA TABLE ═══ -->
+      <section class="table-section">
+        <div class="table-header">
+          <h2>Filtered Titles Dataset</h2>
+          <div class="table-actions">
+            <button class="table-btn" id="btnCSV">CSV</button>
+            <button class="table-btn" id="btnJSON">JSON</button>
+          </div>
+        </div>
+        <div style="overflow-x:auto">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th data-col="title">Title <span class="material-symbols-outlined sort-icon hidden">arrow_downward</span></th>
+                <th data-col="titleType">Type</th>
+                <th data-col="year">Year</th>
+                <th data-col="averageRating" class="sorted-col">Rating <span class="material-symbols-outlined sort-icon" style="color:var(--primary)">arrow_downward</span></th>
+                <th data-col="numVotes" style="text-align:right">Votes</th>
+                <th>Genres</th>
+              </tr>
+            </thead>
+            <tbody id="tableBody"></tbody>
+          </table>
+        </div>
+        <div class="table-footer">
+          <span id="tableInfo">Showing 0 entries</span>
+          <div class="pagination" id="pagination"></div>
+        </div>
+      </section>
+    </div>
+  </main>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════════════ */
+let RAW = [];            // full dataset
+let FILTERED = [];       // after filters
+let ALL_GENRES = [];     // unique genres
+let ALL_TYPES = [];
+let DATA_MIN_YEAR = 1900, DATA_MAX_YEAR = 2025;
+
+// Filter state
+const FILTERS = {
+  type: 'all',
+  yearLo: 1900,
+  yearHi: 2025,
+  genres: new Set(),
+  minVotes: 50000,
+  search: '',
+};
+
+// Table state
+let TABLE_SORT_COL = 'averageRating';
+let TABLE_SORT_ASC = false;
+let TABLE_PAGE = 0;
+const PAGE_SIZE = 20;
+
+// Chart instances
+let scatterChart = null;
+
+/* ═══════════════════════════════════════════════════
+   LOAD DATA
+   ═══════════════════════════════════════════════════ */
+document.addEventListener('DOMContentLoaded', () => {
+  Papa.parse('title.combined.csv', {
+    download: true,
+    header: true,
+    skipEmptyLines: true,
+    complete(results) {
+      RAW = results.data.map(r => ({
+        title:         r.title || '',
+        titleType:     r.titleType || '',
+        genres:        r.genres ? r.genres.split(',').map(g => g.trim()).filter(Boolean) : [],
+        numVotes:      parseInt(r.numVotes, 10) || 0,
+        year:          parseInt(r.year, 10) || 0,
+        averageRating: parseFloat(r.averageRating) || 0,
+      })).filter(r => r.year > 0 && r.numVotes >= 0);
+
+      // Derive meta
+      const genreSet = new Set();
+      const typeSet = new Set();
+      let minY = 9999, maxY = 0;
+      RAW.forEach(r => {
+        r.genres.forEach(g => genreSet.add(g));
+        if (r.titleType) typeSet.add(r.titleType);
+        if (r.year < minY) minY = r.year;
+        if (r.year > maxY) maxY = r.year;
+      });
+      ALL_GENRES = [...genreSet].sort();
+      ALL_TYPES = [...typeSet].sort();
+      DATA_MIN_YEAR = minY;
+      DATA_MAX_YEAR = maxY;
+      FILTERS.yearLo = minY;
+      FILTERS.yearHi = maxY;
+
+      buildUI();
+      applyFilters();
+
+      document.getElementById('loadingOverlay').style.display = 'none';
+    }
+  });
+});
+
+/* ═══════════════════════════════════════════════════
+   BUILD DYNAMIC UI
+   ═══════════════════════════════════════════════════ */
+function buildUI() {
+  // Type dropdown
+  const sel = document.getElementById('filterType');
+  ALL_TYPES.forEach(t => {
+    const o = document.createElement('option');
+    o.value = t;
+    o.textContent = t === 'movie' ? 'Movies' : t === 'tvSeries' ? 'TV Series' : t === 'tvMovie' ? 'TV Movies' : t;
+    sel.appendChild(o);
+  });
+  sel.addEventListener('change', () => { FILTERS.type = sel.value; applyFilters(); });
+
+  // Genre chips
+  const container = document.getElementById('genreChips');
+  const TOP_GENRES = ALL_GENRES.slice(0, 6);  // show first 6, rest in "+More"
+  TOP_GENRES.forEach(g => {
+    const chip = document.createElement('span');
+    chip.className = 'genre-chip';
+    chip.textContent = g;
+    chip.addEventListener('click', () => {
+      if (FILTERS.genres.has(g)) { FILTERS.genres.delete(g); chip.classList.remove('active'); }
+      else { FILTERS.genres.add(g); chip.classList.add('active'); }
+      applyFilters();
+    });
+    container.appendChild(chip);
+  });
+  if (ALL_GENRES.length > 6) {
+    const more = document.createElement('span');
+    more.className = 'genre-chip more';
+    more.textContent = `+ ${ALL_GENRES.length - 6} More`;
+    more.addEventListener('click', () => showAllGenres(container, more));
+    container.appendChild(more);
+  }
+
+  // Year range
+  initDualRange();
+
+  // Min votes
+  const mv = document.getElementById('filterMinVotes');
+  mv.addEventListener('change', () => { FILTERS.minVotes = parseInt(mv.value, 10) || 0; applyFilters(); });
+
+  // Search
+  const si = document.getElementById('searchInput');
+  let debounce;
+  si.addEventListener('input', () => {
+    clearTimeout(debounce);
+    debounce = setTimeout(() => { FILTERS.search = si.value.toLowerCase(); applyFilters(); }, 250);
+  });
+
+  // Table sort
+  document.querySelectorAll('.data-table th[data-col]').forEach(th => {
+    th.addEventListener('click', () => {
+      const col = th.dataset.col;
+      if (TABLE_SORT_COL === col) TABLE_SORT_ASC = !TABLE_SORT_ASC;
+      else { TABLE_SORT_COL = col; TABLE_SORT_ASC = false; }
+      TABLE_PAGE = 0;
+      renderTable();
+      updateSortIcons();
+    });
+  });
+
+  // Export buttons
+  document.getElementById('btnCSV').addEventListener('click', downloadCSV);
+  document.getElementById('btnJSON').addEventListener('click', downloadJSON);
+  document.getElementById('btnExport').addEventListener('click', downloadCSV);
+}
+
+/* ═══════════════════════════════════════════════════
+   SHOW ALL GENRES
+   ═══════════════════════════════════════════════════ */
+function showAllGenres(container, moreBtn) {
+  moreBtn.remove();
+  container.style.maxHeight = '120px';
+  ALL_GENRES.forEach(g => {
+    if (container.querySelector(`[data-genre="${g}"]`)) return;
+    const existing = [...container.children].find(c => c.textContent === g);
+    if (existing) return;
+    const chip = document.createElement('span');
+    chip.className = 'genre-chip' + (FILTERS.genres.has(g) ? ' active' : '');
+    chip.textContent = g;
+    chip.dataset.genre = g;
+    chip.addEventListener('click', () => {
+      if (FILTERS.genres.has(g)) { FILTERS.genres.delete(g); chip.classList.remove('active'); }
+      else { FILTERS.genres.add(g); chip.classList.add('active'); }
+      applyFilters();
+    });
+    container.appendChild(chip);
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   DUAL RANGE SLIDER
+   ═══════════════════════════════════════════════════ */
+function initDualRange() {
+  const track = document.getElementById('yearTrack');
+  const fill = document.getElementById('yearFill');
+  const tLo = document.getElementById('yearThumbLo');
+  const tHi = document.getElementById('yearThumbHi');
+  const display = document.getElementById('yearDisplay');
+
+  function pctFromYear(y) { return ((y - DATA_MIN_YEAR) / (DATA_MAX_YEAR - DATA_MIN_YEAR)) * 100; }
+  function yearFromPct(p) { return Math.round(DATA_MIN_YEAR + (p / 100) * (DATA_MAX_YEAR - DATA_MIN_YEAR)); }
+
+  function render() {
+    const lo = pctFromYear(FILTERS.yearLo);
+    const hi = pctFromYear(FILTERS.yearHi);
+    fill.style.left = lo + '%';
+    fill.style.right = (100 - hi) + '%';
+    tLo.style.left = lo + '%';
+    tHi.style.left = hi + '%';
+    display.textContent = `${FILTERS.yearLo} – ${FILTERS.yearHi}`;
+  }
+  render();
+
+  function startDrag(thumb, which) {
+    function onMove(e) {
+      e.preventDefault();
+      const rect = track.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      let pct = ((clientX - rect.left) / rect.width) * 100;
+      pct = Math.max(0, Math.min(100, pct));
+      const yr = yearFromPct(pct);
+      if (which === 'lo') FILTERS.yearLo = Math.min(yr, FILTERS.yearHi);
+      else FILTERS.yearHi = Math.max(yr, FILTERS.yearLo);
+      render();
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+      applyFilters();
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+    document.addEventListener('touchmove', onMove);
+    document.addEventListener('touchend', onUp);
+  }
+
+  tLo.addEventListener('mousedown', e => { e.preventDefault(); startDrag(tLo, 'lo'); });
+  tHi.addEventListener('mousedown', e => { e.preventDefault(); startDrag(tHi, 'hi'); });
+  tLo.addEventListener('touchstart', e => { e.preventDefault(); startDrag(tLo, 'lo'); });
+  tHi.addEventListener('touchstart', e => { e.preventDefault(); startDrag(tHi, 'hi'); });
+}
+
+/* ═══════════════════════════════════════════════════
+   APPLY FILTERS
+   ═══════════════════════════════════════════════════ */
+function applyFilters() {
+  FILTERED = RAW.filter(r => {
+    if (FILTERS.type !== 'all' && r.titleType !== FILTERS.type) return false;
+    if (r.year < FILTERS.yearLo || r.year > FILTERS.yearHi) return false;
+    if (r.numVotes < FILTERS.minVotes) return false;
+    if (FILTERS.genres.size > 0 && !r.genres.some(g => FILTERS.genres.has(g))) return false;
+    if (FILTERS.search && !r.title.toLowerCase().includes(FILTERS.search)) return false;
+    return true;
+  });
+  TABLE_PAGE = 0;
+  renderMetrics();
+  renderScatter();
+  renderBarChart();
+  renderTable();
+}
+
+/* ═══════════════════════════════════════════════════
+   METRICS
+   ═══════════════════════════════════════════════════ */
+function fmtVotes(n) {
+  if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M';
+  if (n >= 1e3) return Math.round(n / 1e3) + 'K';
+  return n.toLocaleString();
+}
+
+function renderMetrics() {
+  const total = FILTERED.length;
+  document.getElementById('metricTotal').textContent = total.toLocaleString();
+  const totalSub = document.getElementById('metricTotalSub');
+  totalSub.innerHTML = `<span class="material-symbols-outlined">trending_up</span><span>${total < RAW.length ? 'of ' + RAW.length.toLocaleString() + ' total' : 'all titles'}</span>`;
+
+  if (total === 0) {
+    document.getElementById('metricRating').textContent = '—';
+    document.getElementById('metricRatingSub').textContent = '';
+    document.getElementById('metricVotes').textContent = '—';
+    document.getElementById('metricVotesSub').innerHTML = '';
+    document.getElementById('metricYear').textContent = '—';
+    document.getElementById('metricYearSub').textContent = '';
+    return;
+  }
+
+  const ratings = FILTERED.map(r => r.averageRating).sort((a, b) => a - b);
+  const avg = (ratings.reduce((s, v) => s + v, 0) / total).toFixed(1);
+  const top10 = ratings[Math.floor(total * 0.9)]?.toFixed(1) || '—';
+  document.getElementById('metricRating').textContent = avg;
+  document.getElementById('metricRatingSub').textContent = `Top 10% threshold: ${top10}`;
+
+  const votes = FILTERED.map(r => r.numVotes).sort((a, b) => a - b);
+  const median = votes[Math.floor(total / 2)];
+  document.getElementById('metricVotes').textContent = fmtVotes(median);
+  const totalVotes = votes.reduce((s, v) => s + v, 0);
+  document.getElementById('metricVotesSub').innerHTML = `<span class="material-symbols-outlined">trending_down</span><span>Total: ${fmtVotes(totalVotes)}</span>`;
+
+  const years = FILTERED.map(r => r.year);
+  const minY = Math.min(...years), maxY = Math.max(...years);
+  document.getElementById('metricYear').textContent = minY;
+  document.getElementById('metricYearSub').textContent = `Dataset bound: ${minY} – ${maxY}`;
+}
+
+/* ═══════════════════════════════════════════════════
+   SCATTER CHART (Chart.js)
+   ═══════════════════════════════════════════════════ */
+function renderScatter() {
+  const ctx = document.getElementById('scatterChart');
+  if (scatterChart) scatterChart.destroy();
+
+  const typeColorMap = {
+    movie:    { bg: 'rgba(245,197,24,0.6)', border: '#f5c518' },
+    tvSeries: { bg: 'rgba(173,198,255,0.6)', border: '#adc6ff' },
+    tvMovie:  { bg: 'rgba(84,227,167,0.6)',  border: '#54e3a7' },
+  };
+
+  // Group by type
+  const datasets = {};
+  FILTERED.forEach(r => {
+    if (!datasets[r.titleType]) {
+      const c = typeColorMap[r.titleType] || { bg: 'rgba(200,200,200,0.5)', border: '#ccc' };
+      datasets[r.titleType] = {
+        label: r.titleType === 'movie' ? 'Movie' : r.titleType === 'tvSeries' ? 'TV Series' : r.titleType === 'tvMovie' ? 'TV Movie' : r.titleType,
+        data: [],
+        backgroundColor: c.bg,
+        borderColor: c.border,
+        borderWidth: 0.5,
+        pointRadius: 4,
+        pointHoverRadius: 7,
+      };
+    }
+    datasets[r.titleType].data.push({ x: r.numVotes, y: r.averageRating, title: r.title, year: r.year });
+  });
+
+  // Sample if too many points (performance)
+  Object.values(datasets).forEach(ds => {
+    if (ds.data.length > 800) {
+      const step = Math.ceil(ds.data.length / 800);
+      ds.data = ds.data.filter((_, i) => i % step === 0);
+    }
+  });
+
+  scatterChart = new Chart(ctx, {
+    type: 'scatter',
+    data: { datasets: Object.values(datasets) },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400 },
+      plugins: {
+        legend: {
+          labels: { color: '#d1c5ac', font: { family: 'Inter', size: 11 }, boxWidth: 10, padding: 16 },
+        },
+        tooltip: {
+          backgroundColor: '#0a0e16',
+          titleColor: '#f5c518',
+          bodyColor: '#dfe2ee',
+          borderColor: '#f5c518',
+          borderWidth: 1,
+          padding: 10,
+          titleFont: { family: 'Inter', weight: '600' },
+          bodyFont: { family: 'JetBrains Mono', size: 12 },
+          callbacks: {
+            title: items => items[0]?.raw?.title || '',
+            label: item => [
+              `Rating: ${item.raw.y}`,
+              `Votes: ${item.raw.x.toLocaleString()}`,
+              `Year: ${item.raw.year}`,
+            ],
+          }
+        }
+      },
+      scales: {
+        x: {
+          type: 'logarithmic',
+          title: { display: false },
+          grid: { color: 'rgba(255,255,255,0.06)', drawBorder: false },
+          ticks: {
+            color: '#d1c5ac',
+            font: { family: 'JetBrains Mono', size: 11 },
+            callback: v => fmtVotes(v),
+            maxTicksLimit: 5,
+          },
+          border: { color: 'rgba(255,255,255,0.1)' },
+        },
+        y: {
+          grid: { color: 'rgba(255,255,255,0.06)', drawBorder: false },
+          ticks: { color: '#d1c5ac', font: { family: 'JetBrains Mono', size: 11 }, stepSize: 0.5 },
+          border: { color: 'rgba(255,255,255,0.1)' },
+          suggestedMin: 4,
+          suggestedMax: 10,
+        },
+      },
+    },
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   BAR CHART (pure CSS)
+   ═══════════════════════════════════════════════════ */
+const VIRIDIS = ['#440154','#482777','#3e4989','#31688e','#26828e','#1f9e89','#35b779','#6ece58','#b5de2b','#fde725'];
+
+function ratingToViridis(rating, minR, maxR) {
+  if (maxR === minR) return VIRIDIS[5];
+  const idx = Math.round(((rating - minR) / (maxR - minR)) * (VIRIDIS.length - 1));
+  return VIRIDIS[Math.max(0, Math.min(VIRIDIS.length - 1, idx))];
+}
+
+function renderBarChart() {
+  const counts = {};
+  const ratingSum = {};
+  FILTERED.forEach(r => {
+    r.genres.forEach(g => {
+      counts[g] = (counts[g] || 0) + 1;
+      ratingSum[g] = (ratingSum[g] || 0) + r.averageRating;
+    });
+  });
+
+  let entries = Object.entries(counts)
+    .map(([g, c]) => ({ genre: g, count: c, avgRating: ratingSum[g] / c }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 10);
+
+  const maxCount = entries.length ? entries[0].count : 1;
+  const allRatings = entries.map(e => e.avgRating);
+  const minR = Math.min(...allRatings, 0);
+  const maxR = Math.max(...allRatings, 10);
+
+  const container = document.getElementById('barChart');
+  container.innerHTML = '';
+
+  entries.forEach(e => {
+    const pct = (e.count / maxCount * 85).toFixed(1);
+    const color = ratingToViridis(e.avgRating, minR, maxR);
+    container.innerHTML += `
+      <div class="bar-row">
+        <div class="bar-label">${e.genre}</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${pct}%;background:${color}"></div>
+        </div>
+        <div class="bar-count">${e.count}</div>
+      </div>`;
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   DATA TABLE
+   ═══════════════════════════════════════════════════ */
+function renderTable() {
+  const sorted = [...FILTERED].sort((a, b) => {
+    let va = a[TABLE_SORT_COL], vb = b[TABLE_SORT_COL];
+    if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+    if (va < vb) return TABLE_SORT_ASC ? -1 : 1;
+    if (va > vb) return TABLE_SORT_ASC ? 1 : -1;
+    return 0;
+  });
+
+  const totalPages = Math.ceil(sorted.length / PAGE_SIZE) || 1;
+  if (TABLE_PAGE >= totalPages) TABLE_PAGE = totalPages - 1;
+  const start = TABLE_PAGE * PAGE_SIZE;
+  const page = sorted.slice(start, start + PAGE_SIZE);
+
+  const tbody = document.getElementById('tableBody');
+  tbody.innerHTML = page.map((r, i) => {
+    const genreBadges = r.genres.map(g => `<span class="genre-badge">${g}</span>`).join('');
+    const stripe = (start + i) % 2 === 1 ? 'style="background:rgba(255,255,255,0.01)"' : '';
+    return `<tr ${stripe}>
+      <td class="td-title">${escHtml(r.title)}</td>
+      <td class="td-type">${r.titleType === 'movie' ? 'Movie' : r.titleType === 'tvSeries' ? 'TV Series' : 'TV Movie'}</td>
+      <td class="td-year">${r.year}</td>
+      <td><div class="td-rating"><span class="material-symbols-outlined">star</span>${r.averageRating.toFixed(1)}</div></td>
+      <td class="td-votes">${fmtVotes(r.numVotes)}</td>
+      <td><div class="td-genres">${genreBadges}</div></td>
+    </tr>`;
+  }).join('');
+
+  document.getElementById('tableInfo').textContent =
+    `Showing ${sorted.length ? start + 1 : 0} to ${Math.min(start + PAGE_SIZE, sorted.length)} of ${sorted.length.toLocaleString()} entries`;
+
+  // Pagination
+  const pag = document.getElementById('pagination');
+  pag.innerHTML = '';
+  const prevBtn = document.createElement('button');
+  prevBtn.className = 'page-btn';
+  prevBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">chevron_left</span>';
+  prevBtn.disabled = TABLE_PAGE === 0;
+  prevBtn.addEventListener('click', () => { TABLE_PAGE--; renderTable(); });
+  pag.appendChild(prevBtn);
+
+  const maxBtns = 5;
+  let startP = Math.max(0, TABLE_PAGE - 2);
+  let endP = Math.min(totalPages, startP + maxBtns);
+  if (endP - startP < maxBtns) startP = Math.max(0, endP - maxBtns);
+
+  for (let i = startP; i < endP; i++) {
+    const b = document.createElement('button');
+    b.className = 'page-btn' + (i === TABLE_PAGE ? ' active' : '');
+    b.textContent = i + 1;
+    b.addEventListener('click', () => { TABLE_PAGE = i; renderTable(); });
+    pag.appendChild(b);
+  }
+  if (endP < totalPages) {
+    const dots = document.createElement('span');
+    dots.style.cssText = 'padding:4px 6px;color:var(--on-surf-var);font-size:12px';
+    dots.textContent = '…';
+    pag.appendChild(dots);
+  }
+
+  const nextBtn = document.createElement('button');
+  nextBtn.className = 'page-btn';
+  nextBtn.innerHTML = '<span class="material-symbols-outlined" style="font-size:16px;vertical-align:middle">chevron_right</span>';
+  nextBtn.disabled = TABLE_PAGE >= totalPages - 1;
+  nextBtn.addEventListener('click', () => { TABLE_PAGE++; renderTable(); });
+  pag.appendChild(nextBtn);
+}
+
+function updateSortIcons() {
+  document.querySelectorAll('.data-table th[data-col]').forEach(th => {
+    const icon = th.querySelector('.sort-icon');
+    if (!icon) return;
+    if (th.dataset.col === TABLE_SORT_COL) {
+      icon.classList.remove('hidden');
+      icon.style.color = 'var(--primary)';
+      icon.textContent = TABLE_SORT_ASC ? 'arrow_upward' : 'arrow_downward';
+    } else {
+      icon.classList.add('hidden');
+      icon.style.color = '';
+      icon.textContent = 'arrow_downward';
+    }
+  });
+}
+
+/* ═══════════════════════════════════════════════════
+   DOWNLOAD
+   ═══════════════════════════════════════════════════ */
+function downloadCSV() {
+  const rows = [['Title','Type','Year','Rating','Votes','Genres']];
+  FILTERED.forEach(r => rows.push([r.title, r.titleType, r.year, r.averageRating, r.numVotes, r.genres.join('; ')]));
+  const csv = rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n');
+  downloadFile(csv, 'imdb_filtered.csv', 'text/csv');
+}
+function downloadJSON() {
+  const json = JSON.stringify(FILTERED.map(r => ({
+    title: r.title, type: r.titleType, year: r.year,
+    rating: r.averageRating, votes: r.numVotes, genres: r.genres
+  })), null, 2);
+  downloadFile(json, 'imdb_filtered.json', 'application/json');
+}
+function downloadFile(content, name, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type }));
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+function escHtml(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+</script>
+</body>
+</html>
