@@ -2,8 +2,6 @@
 
 A pixel-perfect, interactive data visualization dashboard for exploring the top IMDb titles. This dashboard was built purely using HTML, CSS, and JavaScript, with no build steps required.
 
-![Dashboard Preview](screen.png)
-
 ## Features
 - **Zero Dependencies/Build Steps**: Built with pure HTML/CSS/Vanilla JS.
 - **Client-Side Data Loading**: Uses [PapaParse](https://www.papaparse.com/) to load and parse the CSV dataset on the fly.
@@ -35,8 +33,6 @@ Then, navigate to `http://localhost:8080/index.html`
 ## Repository Structure
 - `index.html`: The main dashboard containing all HTML, CSS styling, and JavaScript logic.
 - `title.combined.csv`: The IMDb dataset containing top ranked titles.
-- `DESIGN.md`: Design system guidelines and color tokens used to build the dashboard.
-- `screen.png`: Visual reference of the target design.
 
 ## Modifying the Dashboard
 Everything is contained within `index.html`. 
